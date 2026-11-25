@@ -6,6 +6,7 @@ import { updateOrders } from './orders.js';
 import { render } from './render.js';
 import { initInput } from './input.js';
 import { buildScene } from './scenes.js';
+import { initMobile } from './mobile.js';
 
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
@@ -17,6 +18,7 @@ const sceneName = new URLSearchParams(location.search).get('scene');
 if (sceneName) Object.assign(state, buildScene(sceneName));
 
 initInput(canvas, state);
+initMobile();
 
 function update(dt) {
   if (state.toast) {
