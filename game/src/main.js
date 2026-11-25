@@ -1,8 +1,8 @@
 // 启动、主循环、update + render 调度。
-import { createState, finishGame } from './state.js';
+import { createState, finishGame, resetState } from './state.js';
 import { SHIFT_SECONDS } from './timer.js';
 import { updateStations } from './stations.js';
-import { updateOrders } from './orders.js';
+import { updateOrders, updateRush } from './orders.js';
 import { render } from './render.js';
 import { initInput } from './input.js';
 import { buildScene } from './scenes.js';
@@ -14,8 +14,14 @@ const ctx = canvas.getContext('2d');
 const state = createState();
 window.__meow = state;
 
-const sceneName = new URLSearchParams(location.search).get('scene');
+// 测试钩子：?scene=、?level=N（直接开始第 N 关）、?clock=S（初始 clock 秒数）
+const params = new URLSearchParams(location.search);
+const sceneName = params.get('scene');
 if (sceneName) Object.assign(state, buildScene(sceneName));
+if (params.has('level')) {
+  resetState(state, 'playing', Number(params.get('level')));
+  if (params.has('clock')) state.clock = Math.max(0, Math.min(SHIFT_SECONDS, Number(params.get('clock')) || 0));
+}
 
 initInput(canvas, state);
 initMobile();
@@ -27,6 +33,7 @@ function update(dt) {
   }
   if (state.phase !== 'playing') return;
   state.clock += dt;
+  updateRush(state, dt);
   updateStations(state, dt);
   updateOrders(state, dt);
   for (const f of state.floaters) f.age += dt;

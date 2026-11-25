@@ -94,6 +94,22 @@ const SFX = {
     tone(c, t, { type: 'sawtooth', f0: 190, f1: 100, dur: 0.18, gain: 0.2 });
     tone(c, t + 0.2, { type: 'sawtooth', f0: 150, f1: 80, dur: 0.25, gain: 0.2 });
   },
+  rush(c, t) {
+    [523, 659, 784, 1047].forEach((f, i) => {
+      tone(c, t + i * 0.11, { type: 'square', f0: f, dur: 0.16, gain: 0.13 });
+    });
+    tone(c, t + 0.5, { type: 'triangle', f0: 1047, f1: 1175, dur: 0.5, gain: 0.18 });
+  },
+  win(c, t) {
+    [523, 659, 784, 1047, 1319].forEach((f, i) => {
+      tone(c, t + i * 0.12, { type: 'triangle', f0: f, dur: 0.3, gain: 0.2 });
+    });
+  },
+  lose(c, t) {
+    [392, 330, 262].forEach((f, i) => {
+      tone(c, t + i * 0.2, { type: 'triangle', f0: f, f1: f * 0.94, dur: 0.3, gain: 0.2 });
+    });
+  },
   click(c, t) {
     tone(c, t, { f0: 820, f1: 620, dur: 0.05, gain: 0.15 });
   },

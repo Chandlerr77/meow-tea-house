@@ -1,25 +1,43 @@
-// 顾客生成、耐心衰减、过期扣星、出杯判定与计分。
+// 顾客生成、耐心衰减、过期扣星、出杯判定与计分；VIP 与高峰时段规则。
 import { ANIMALS, makeOrderSpec, matches } from './drinks.js';
-import { difficulty } from './timer.js';
+import { difficulty, SHIFT_SECONDS, RUSH_TIP_FACTOR } from './timer.js';
 import { MAX_SLOTS, ticketRect } from './layout.js';
 import { addFloater, finishGame, say } from './state.js';
 import { fail } from './feedback.js';
 import { play } from './audio.js';
 
+export const VIP_ANIMAL = 'goldcat';
+export const VIP_TIP_FACTOR = 2;
+export const VIP_PATIENCE_FACTOR = 0.5;
+
 export function comboMultiplier(combo) {
   return Math.min(2, 1 + 0.1 * combo);
 }
 
-export function spawnOrder(state) {
-  const diff = difficulty(state.clock);
-  const spec = makeOrderSpec(state.clock);
+// 高峰时段：clock 进入最后 rushSeconds 秒时触发一次，直到本局结束
+export function updateRush(state, dt = 0) {
+  if (state.rush) { state.rushAge += dt; return; }
+  if (state.clock >= SHIFT_SECONDS - state.levelCfg.rushSeconds) {
+    state.rush = true;
+    state.rushAge = 0;
+    play('rush');
+  }
+}
+
+export function spawnOrder(state, rand = Math.random) {
+  const cfg = state.levelCfg;
+  const diff = difficulty(cfg, state.rush);
+  const spec = makeOrderSpec(cfg, rand);
+  const vip = cfg.vip > 0 && !state.orders.some((o) => o.vip) && rand() < cfg.vip;
   const used = state.orders.map((o) => o.animal);
   const free = ANIMALS.filter((a) => !used.includes(a));
   const pool = free.length ? free : ANIMALS;
-  const patience = diff.patience + (spec.toppings.length - 1) * 4;
+  let patience = diff.patience + (spec.toppings.length - 1) * 4;
+  if (vip) patience *= VIP_PATIENCE_FACTOR;
   state.orders.push({
     id: state.nextOrderId++,
-    animal: pool[Math.floor(Math.random() * pool.length)],
+    animal: vip ? VIP_ANIMAL : pool[Math.floor(rand() * pool.length)],
+    vip,
     base: spec.base,
     toppings: spec.toppings,
     patience,
@@ -28,8 +46,8 @@ export function spawnOrder(state) {
   });
 }
 
-export function updateOrders(state, dt) {
-  const diff = difficulty(state.clock);
+export function updateOrders(state, dt, rand = Math.random) {
+  const diff = difficulty(state.levelCfg, state.rush);
   for (const o of state.orders) {
     o.age = (o.age || 0) + dt;
     o.patience -= dt;
@@ -52,8 +70,8 @@ export function updateOrders(state, dt) {
   if (state.orders.length === 0 && state.spawnTimer > 1.5) state.spawnTimer = 1.5;
   if (state.spawnTimer <= 0) {
     if (state.orders.length < Math.min(diff.maxOrders, MAX_SLOTS)) {
-      spawnOrder(state);
-      state.spawnTimer = diff.spawnInterval * (0.85 + Math.random() * 0.3);
+      spawnOrder(state, rand);
+      state.spawnTimer = diff.spawnInterval * (0.85 + rand() * 0.3);
     } else {
       state.spawnTimer = 1;
     }
@@ -63,9 +81,13 @@ export function updateOrders(state, dt) {
 function deliver(state, order) {
   const index = state.orders.indexOf(order);
   const r = ticketRect(index);
-  const tip = Math.floor(Math.max(0, order.patience / order.maxPatience) * 50);
+  const ratio = Math.max(0, order.patience / order.maxPatience);
+  // 小费：耐心比例 ×50；VIP ×2、高峰 ×1.5，可叠乘
+  const tipFactor = (order.vip ? VIP_TIP_FACTOR : 1) * (state.rush ? RUSH_TIP_FACTOR : 1);
+  const tip = Math.floor(ratio * 50 * tipFactor);
   const mult = comboMultiplier(state.combo);
   const points = Math.round((100 + tip) * mult);
+  state.lastServe = { points, tip, ratio, tipFactor, mult, vip: !!order.vip, rush: state.rush };
   state.score += points;
   state.coins = Math.floor(state.score / 10);
   state.served += 1;
@@ -73,8 +95,14 @@ function deliver(state, order) {
   state.bestCombo = Math.max(state.bestCombo, state.combo);
   state.hand = null;
   state.orders.splice(index, 1);
-  addFloater(state, r.x + r.w / 2, r.y + r.h + 60, `+${points}`);
-  if (tip > 0) addFloater(state, r.x + r.w / 2, r.y + r.h + 95, `小费 ${tip}`, '#7fe08a');
+  const cx = r.x + r.w / 2;
+  if (order.vip) {
+    addFloater(state, cx, r.y + r.h + 60, `VIP +${points}`, '#ffe03a');
+    if (tip > 0) addFloater(state, cx, r.y + r.h + 95, `小费 ${tip}`, '#ffc400');
+  } else {
+    addFloater(state, cx, r.y + r.h + 60, `+${points}`);
+    if (tip > 0) addFloater(state, cx, r.y + r.h + 95, `小费 ${tip}`, '#7fe08a');
+  }
   play('coin');
   play('ding');
 }

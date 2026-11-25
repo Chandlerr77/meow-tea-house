@@ -1,5 +1,5 @@
-// 5 种动物顾客的矢量绘制：猫、狗、兔子、熊猫、狐狸。
-import { circle, ellipse, poly } from './draw.js';
+// 动物顾客的矢量绘制：猫、狗、兔子、熊猫、狐狸，以及 VIP 金色猫。
+import { circle, ellipse, poly, fillRR, txt } from './draw.js';
 
 const OUTLINE = '#4a2c1a';
 
@@ -129,7 +129,51 @@ function drawFox(ctx, cx, cy, mood) {
   ellipse(ctx, cx, cy + 10, 6, 4.5, '#222');
 }
 
-const DRAWERS = { cat: drawCat, dog: drawDog, rabbit: drawRabbit, panda: drawPanda, fox: drawFox };
+// VIP 金色猫：金毛 + 皇冠 + 胸前 VIP 徽章
+function drawGoldcat(ctx, cx, cy, mood) {
+  const GOLD = '#ffd24a';
+  const DEEP = '#d9a21b';
+  body(ctx, cx, cy, GOLD, '#8e2bd0');
+  // 胸前徽章
+  fillRR(ctx, cx - 25, cy + 66, 50, 22, 11, '#fff3b0', '#b8860b', 2);
+  txt(ctx, 'VIP', cx, cy + 77, { size: 15, weight: 'bold', color: '#a8321f', align: 'center' });
+  poly(ctx, [[cx - 44, cy - 10], [cx - 40, cy - 62], [cx - 8, cy - 36]], GOLD, OUTLINE, 2);
+  poly(ctx, [[cx + 44, cy - 10], [cx + 40, cy - 62], [cx + 8, cy - 36]], GOLD, OUTLINE, 2);
+  poly(ctx, [[cx - 37, cy - 22], [cx - 36, cy - 50], [cx - 18, cy - 35]], '#f7b6b6');
+  poly(ctx, [[cx + 37, cy - 22], [cx + 36, cy - 50], [cx + 18, cy - 35]], '#f7b6b6');
+  ellipse(ctx, cx, cy, 49, 42, GOLD, 0, OUTLINE, 2);
+  ctx.strokeStyle = DEEP;
+  ctx.lineWidth = 3;
+  ctx.lineCap = 'round';
+  for (const dx of [-14, 14]) {
+    ctx.beginPath();
+    ctx.moveTo(cx + dx, cy - 12);
+    ctx.lineTo(cx + dx * 1.25, cy - 2);
+    ctx.stroke();
+  }
+  ellipse(ctx, cx, cy + 14, 19, 13, '#fff8dc');
+  face(ctx, cx, cy, mood);
+  poly(ctx, [[cx - 5, cy + 5], [cx + 5, cy + 5], [cx, cy + 11]], '#e8758a');
+  ctx.strokeStyle = '#7a5a2a';
+  ctx.lineWidth = 1.5;
+  for (const s of [-1, 1]) {
+    for (const dy of [-3, 4]) {
+      ctx.beginPath();
+      ctx.moveTo(cx + s * 22, cy + 14 + dy * 0.5);
+      ctx.lineTo(cx + s * 52, cy + 12 + dy * 2.5);
+      ctx.stroke();
+    }
+  }
+  // 皇冠
+  poly(ctx, [[cx - 24, cy - 38], [cx - 28, cy - 70], [cx - 12, cy - 55], [cx, cy - 76], [cx + 12, cy - 55], [cx + 28, cy - 70], [cx + 24, cy - 38]], '#ffcf1f', '#a8741a', 2.5);
+  fillRR(ctx, cx - 25, cy - 44, 50, 9, 3, '#e0a800', '#a8741a', 2);
+  circle(ctx, cx - 28, cy - 71, 4, '#ff5a6a', '#a8741a', 1.5);
+  circle(ctx, cx, cy - 77, 4.5, '#5ad0ff', '#a8741a', 1.5);
+  circle(ctx, cx + 28, cy - 71, 4, '#ff5a6a', '#a8741a', 1.5);
+  circle(ctx, cx, cy - 40, 3, '#fff', '#a8741a', 1);
+}
+
+const DRAWERS = { cat: drawCat, dog: drawDog, rabbit: drawRabbit, panda: drawPanda, fox: drawFox, goldcat: drawGoldcat };
 
 export function moodFor(ratio) {
   return ratio > 0.55 ? 'happy' : ratio > 0.25 ? 'neutral' : 'angry';

@@ -1,18 +1,25 @@
 // 鼠标命中 + 键盘输入。
 import {
   W, H, hit, baseButtons, toppingButtons, brewSlotRects, shakerRect, handRect, handCupRect, ticketRect,
-  pauseBtn, muteBtn, titleStartBtn, resultsAgainBtn, resultsTitleBtn, pauseContinueBtn, pauseRestartBtn,
+  pauseBtn, muteBtn, titleStartBtn, levelButtons, resultsButtons, pauseContinueBtn, pauseRestartBtn,
 } from './layout.js';
+import { MAX_LEVEL } from './levels.js';
 import { BASES, TOPPINGS } from './drinks.js';
 import { startBrew, addTopping, startShake, selectSlot, discardHand } from './stations.js';
 import { serveBest, serveOrder } from './orders.js';
-import { resetState } from './state.js';
+import { resetState, say } from './state.js';
 import * as audio from './audio.js';
 
-function startGame(state) {
-  resetState(state, 'playing');
+export function startGame(state, level = state.level) {
+  resetState(state, 'playing', level);
   audio.play('click');
 }
+
+// 标题画面“开始营业”：最高已解锁关卡
+export const highestUnlocked = (state) => Math.min(MAX_LEVEL, state.progress.unlocked);
+
+// 结算画面能否进入下一关
+export const canGoNext = (state) => state.won && state.level < MAX_LEVEL;
 
 function toTitle(state) {
   resetState(state, 'title');
@@ -34,10 +41,20 @@ function handleKey(state, e) {
   const lower = key.length === 1 ? key.toLowerCase() : key;
 
   if (lower === 'm' && !e.repeat) { toggleMute(state); return true; }
-  if (e.shiftKey && lower === 'r' && !e.repeat) { startGame(state); return true; }
+  if (e.shiftKey && lower === 'r' && !e.repeat) {
+    startGame(state, state.phase === 'title' ? highestUnlocked(state) : state.level);
+    return true;
+  }
 
-  if (state.phase === 'title' || state.phase === 'results') {
-    if ((key === 'Enter' || key === ' ') && !e.repeat) { startGame(state); return true; }
+  if (state.phase === 'title') {
+    if ((key === 'Enter' || key === ' ') && !e.repeat) { startGame(state, highestUnlocked(state)); return true; }
+    return false;
+  }
+  if (state.phase === 'results') {
+    if ((key === 'Enter' || key === ' ') && !e.repeat) {
+      startGame(state, canGoNext(state) ? state.level + 1 : state.level);
+      return true;
+    }
     return false;
   }
   if (lower === 'p' && !e.repeat) { togglePause(state); return true; }
@@ -56,19 +73,27 @@ function handleKey(state, e) {
 function handleClick(state, x, y) {
   audio.unlock();
   if (state.phase === 'title') {
-    if (hit(titleStartBtn, x, y)) startGame(state);
+    for (let i = 0; i < levelButtons.length; i++) {
+      if (!hit(levelButtons[i], x, y)) continue;
+      if (i + 1 <= state.progress.unlocked) startGame(state, i + 1);
+      else { say(state, `第 ${i} 关通关后解锁`, true); audio.play('error'); }
+      return;
+    }
+    if (hit(titleStartBtn, x, y)) startGame(state, highestUnlocked(state));
     return;
   }
   if (state.phase === 'results') {
-    if (hit(resultsAgainBtn, x, y)) startGame(state);
-    else if (hit(resultsTitleBtn, x, y)) toTitle(state);
+    const b = resultsButtons(canGoNext(state));
+    if (b.next && hit(b.next, x, y)) startGame(state, state.level + 1);
+    else if (hit(b.again, x, y)) startGame(state, state.level);
+    else if (hit(b.title, x, y)) toTitle(state);
     return;
   }
   if (hit(muteBtn, x, y)) { toggleMute(state); return; }
   if (hit(pauseBtn, x, y)) { togglePause(state); return; }
   if (state.phase === 'paused') {
     if (hit(pauseContinueBtn, x, y)) state.phase = 'playing';
-    else if (hit(pauseRestartBtn, x, y)) startGame(state);
+    else if (hit(pauseRestartBtn, x, y)) startGame(state, state.level);
     return;
   }
   for (let i = 0; i < BASES.length; i++) {

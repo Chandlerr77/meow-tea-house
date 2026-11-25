@@ -1,6 +1,8 @@
 // 冲泡槽、加料、摇杯器逻辑，以及“手里只能拿一杯”的约束。
 import { BREW_SECONDS, SHAKE_SECONDS } from './timer.js';
 import { createBrewSlot, say } from './state.js';
+import { BASES } from './drinks.js';
+import { baseUnlockLevel } from './levels.js';
 import { fail } from './feedback.js';
 import { play } from './audio.js';
 
@@ -21,7 +23,15 @@ export function selectSlot(state, index) {
   if (s && s.cup && s.done) state.selected = index;
 }
 
+// 茶底是否已在当前关卡解锁
+export function baseUnlocked(state, baseIndex) {
+  return baseIndex < state.levelCfg.bases;
+}
+
 export function startBrew(state, baseId) {
+  const bi = BASES.findIndex((b) => b.id === baseId);
+  if (bi < 0) return { ok: false };
+  if (!baseUnlocked(state, bi)) return fail(state, `${BASES[bi].name}：第 ${baseUnlockLevel(bi)} 关解锁`);
   if (state.hand) return fail(state, '手里已有饮品');
   const slot = state.brewSlots.find((s) => !s.cup);
   if (!slot) return fail(state, '冲泡槽已满');

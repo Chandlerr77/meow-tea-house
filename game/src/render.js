@@ -1,12 +1,12 @@
 // 全部绘制：茶馆背景、顾客、点单票、工作站、HUD、漂浮字；标题/暂停/结算见 screens.js。
 import {
   W, H, COUNTER_Y, hit, slotCenterX, ticketRect, pauseBtn, muteBtn, brewPanel, toppingPanel, shakePanel,
-  baseButtons, toppingButtons, brewSlotRects, toppingInfoRect, shakerRect, handRect, hintRect,
+  baseButtons, toppingButtons, brewSlotRects, toppingInfoRect, shakerRect, handRect, hintRect, rushBanner,
 } from './layout.js';
 import { BASES, TOPPINGS, baseById, toppingById, matches } from './drinks.js';
 import { SHIFT_SECONDS, formatTime } from './timer.js';
 import { comboMultiplier } from './orders.js';
-import { targetSlot } from './stations.js';
+import { targetSlot, baseUnlocked } from './stations.js';
 import { drawAnimal } from './animals.js';
 import { drawTitle, drawPause, drawResults } from './screens.js';
 import { rr, fillRR, txt, circle, drawCup, drawStar } from './draw.js';
@@ -32,8 +32,60 @@ function drawGame(ctx, state) {
   drawShakeStation(ctx, state);
   drawHandRow(ctx, state);
   drawHints(ctx);
+  if (state.rush) drawRushTint(ctx, state);
   drawHud(ctx, state);
+  if (state.rush) drawRushBanner(ctx, state);
   drawFloaters(ctx, state);
+}
+
+// 高峰时段：暖橙色调 overlay
+function drawRushTint(ctx, state) {
+  const pulse = 0.5 + 0.5 * Math.sin(state.time * 3);
+  ctx.fillStyle = `rgba(255,150,40,${0.1 + 0.03 * pulse})`;
+  ctx.fillRect(0, 56, W, H - 56);
+  const g = ctx.createRadialGradient(W / 2, H / 2, 300, W / 2, H / 2, 760);
+  g.addColorStop(0, 'rgba(255,120,20,0)');
+  g.addColorStop(1, `rgba(255,110,20,${0.18 + 0.06 * pulse})`);
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 56, W, H - 56);
+}
+
+// 横幅“高峰时段！”：触发后一直显示到本局结束；刚触发的 2 秒里先放大弹出
+function drawRushBanner(ctx, state) {
+  const r = rushBanner;
+  const g = ctx.createLinearGradient(0, r.y, 0, r.y + r.h);
+  g.addColorStop(0, '#ff7a1a');
+  g.addColorStop(1, '#e0480f');
+  ctx.fillStyle = g;
+  ctx.fillRect(r.x, r.y, r.w, r.h);
+  ctx.fillStyle = '#ffd36a';
+  ctx.fillRect(r.x, r.y + r.h - 2, r.w, 2);
+  const nx = Math.round((state.time * 60) % 40);
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(r.x, r.y, r.w, r.h);
+  ctx.clip();
+  ctx.fillStyle = 'rgba(255,255,255,0.12)';
+  for (let x = -40 + nx; x < W; x += 40) {
+    ctx.beginPath();
+    ctx.moveTo(x, r.y + r.h);
+    ctx.lineTo(x + 14, r.y);
+    ctx.lineTo(x + 28, r.y);
+    ctx.lineTo(x + 14, r.y + r.h);
+    ctx.fill();
+  }
+  ctx.restore();
+  txt(ctx, '高峰时段！　顾客更多更急　小费 ×1.5', W / 2, r.y + r.h / 2, { size: 17, weight: 'bold', color: '#fff6dc', align: 'center', stroke: '#8a2a0a', sw: 4 });
+  if (state.rushAge < 2.2) {
+    const k = state.rushAge;
+    const pop = k < 0.3 ? 0.6 + (k / 0.3) * 0.5 : 1.1 - Math.min(0.1, (k - 0.3) * 0.2);
+    ctx.save();
+    ctx.globalAlpha = k > 1.7 ? Math.max(0, (2.2 - k) / 0.5) : 1;
+    ctx.translate(W / 2, 228);
+    ctx.scale(pop, pop);
+    txt(ctx, '高峰时段！', 0, 0, { size: 84, weight: 'bold', color: '#fff6dc', align: 'center', stroke: '#c2410c', sw: 14 });
+    ctx.restore();
+  }
 }
 
 function drawWall(ctx) {
@@ -102,7 +154,9 @@ function drawTickets(ctx, state) {
     ctx.shadowColor = 'rgba(0,0,0,0.3)';
     ctx.shadowBlur = 8;
     ctx.shadowOffsetY = 3;
-    fillRR(ctx, r.x, r.y, r.w, r.h, 10, ratio < 0.25 && pulse > 0.5 ? '#ffe3dc' : '#fffaf0', ready ? '#ffb300' : '#c9a36e', ready ? 5 : 2);
+    const fillColor = ratio < 0.25 && pulse > 0.5 ? '#ffe3dc' : o.vip ? '#fff4c2' : '#fffaf0';
+    const edge = ready ? '#ffb300' : o.vip ? '#d9a000' : '#c9a36e';
+    fillRR(ctx, r.x, r.y, r.w, r.h, 10, fillColor, edge, ready ? 5 : o.vip ? 4 : 2);
     ctx.restore();
     if (ready) {
       ctx.globalAlpha = 0.4 + 0.4 * pulse;
@@ -111,16 +165,20 @@ function drawTickets(ctx, state) {
     }
     circle(ctx, r.x + r.w / 2, r.y + 4, 4, '#d9342b');
     const base = baseById(o.base);
-    circle(ctx, r.x + 24, r.y + 28, 10, base.color, INK, 2);
-    txt(ctx, base.name, r.x + 44, r.y + 28, { size: 24, weight: 'bold', color: INK });
+    circle(ctx, r.x + 22, r.y + 20, 9, base.color, INK, 2);
+    txt(ctx, base.name, r.x + 40, r.y + 20, { size: 21, weight: 'bold', color: INK });
     o.toppings.forEach((id, k) => {
       const t = toppingById(id);
-      const x = r.x + 18 + k * 94;
-      circle(ctx, x + 7, r.y + 58, 7, t.color, INK, 1.5);
-      txt(ctx, t.name, x + 20, r.y + 58, { size: 18, color: INK });
+      const x = r.x + 14 + k * 94;
+      circle(ctx, x + 7, r.y + 43, 7, t.color, INK, 1.5);
+      txt(ctx, t.name, x + 20, r.y + 43, { size: 17, color: INK });
     });
-    fillRR(ctx, r.x + 12, r.y + r.h - 18, r.w - 24, 9, 4, 'rgba(0,0,0,0.15)');
-    if (ratio > 0) fillRR(ctx, r.x + 12, r.y + r.h - 18, (r.w - 24) * ratio, 9, 4, patienceColor(ratio));
+    if (o.vip) {
+      fillRR(ctx, r.x + r.w - 52, r.y - 9, 46, 20, 10, '#ffcf1f', '#a8741a', 2);
+      txt(ctx, 'VIP', r.x + r.w - 29, r.y + 1, { size: 14, weight: 'bold', color: '#a8321f', align: 'center' });
+    }
+    fillRR(ctx, r.x + 12, r.y + r.h - 15, r.w - 24, 8, 4, 'rgba(0,0,0,0.15)');
+    if (ratio > 0) fillRR(ctx, r.x + 12, r.y + r.h - 15, (r.w - 24) * ratio, 8, 4, patienceColor(ratio));
   });
 }
 
@@ -130,21 +188,49 @@ function panel(ctx, r, title) {
   txt(ctx, title, r.x + 70, r.y + 2, { size: 18, weight: 'bold', color: '#ffe9b0', align: 'center' });
 }
 
-function button(ctx, state, r, { label, key, color, enabled = true, active = false }) {
-  const hover = enabled && hit(r, state.mouse.x, state.mouse.y);
-  ctx.globalAlpha = enabled ? 1 : 0.5;
-  fillRR(ctx, r.x, r.y + (hover ? -2 : 0), r.w, r.h, 12, hover ? '#fff' : '#fff9ee', active ? '#ff9f1c' : '#a8743f', active ? 4 : 2);
-  circle(ctx, r.x + r.w / 2, r.y + 24 + (hover ? -2 : 0), 12, color, INK, 2);
-  txt(ctx, label, r.x + r.w / 2, r.y + 49, { size: 18, weight: 'bold', color: INK, align: 'center' });
-  fillRR(ctx, r.x + 4, r.y + 4, 22, 20, 6, '#7b2d1a');
-  txt(ctx, key.toUpperCase(), r.x + 15, r.y + 14, { size: 14, weight: 'bold', color: '#ffe9b0', align: 'center' });
+function padlock(ctx, cx, cy, s = 1) {
+  ctx.strokeStyle = '#6f6458';
+  ctx.lineWidth = 3 * s;
+  ctx.beginPath();
+  ctx.arc(cx, cy - 4 * s, 6 * s, Math.PI, 0);
+  ctx.stroke();
+  fillRR(ctx, cx - 9 * s, cy - 4 * s, 18 * s, 14 * s, 3 * s, '#8a7f72', '#6f6458', 1.5);
+  circle(ctx, cx, cy + 3 * s, 2 * s, '#4a4238');
+}
+
+function button(ctx, state, r, { label, key, color, enabled = true, active = false, locked = false }) {
+  const compact = r.w < 70;
+  const hover = (enabled || locked) && hit(r, state.mouse.x, state.mouse.y);
+  const dy = hover && !locked ? -2 : 0;
+  ctx.globalAlpha = enabled || locked ? 1 : 0.5;
+  if (locked) {
+    fillRR(ctx, r.x, r.y, r.w, r.h, 12, '#d9d2c7', '#a89d8e', 2);
+    padlock(ctx, r.x + r.w / 2, r.y + 30);
+    txt(ctx, label, r.x + r.w / 2, r.y + 54, { size: compact ? 17 : 18, weight: 'bold', color: '#8a7f72', align: 'center' });
+  } else {
+    fillRR(ctx, r.x, r.y + dy, r.w, r.h, 12, hover ? '#fff' : '#fff9ee', active ? '#ff9f1c' : '#a8743f', active ? 4 : 2);
+    if (compact) {
+      circle(ctx, r.x + r.w / 2, r.y + 32 + dy, 10, color, INK, 2);
+      txt(ctx, label, r.x + r.w / 2, r.y + 54 + dy, { size: 17, weight: 'bold', color: INK, align: 'center' });
+    } else {
+      circle(ctx, r.x + r.w / 2, r.y + 24 + dy, 12, color, INK, 2);
+      txt(ctx, label, r.x + r.w / 2, r.y + 49 + dy, { size: 18, weight: 'bold', color: INK, align: 'center' });
+    }
+  }
+  const kw = compact ? 16 : 22;
+  const kh = compact ? 16 : 20;
+  fillRR(ctx, r.x + 4, r.y + 4 + dy, kw, kh, 5, locked ? '#9a9084' : '#7b2d1a');
+  txt(ctx, key.toUpperCase(), r.x + 4 + kw / 2, r.y + 4 + kh / 2 + dy, { size: compact ? 12 : 14, weight: 'bold', color: '#ffe9b0', align: 'center' });
   ctx.globalAlpha = 1;
 }
 
 function drawBrewStation(ctx, state) {
   panel(ctx, brewPanel, '冲茶站');
   const can = !state.hand && state.brewSlots.some((s) => !s.cup);
-  BASES.forEach((b, i) => button(ctx, state, baseButtons[i], { label: b.name, key: b.key, color: b.color, enabled: can }));
+  BASES.forEach((b, i) => {
+    const locked = !baseUnlocked(state, i);
+    button(ctx, state, baseButtons[i], { label: b.short, key: b.key, color: b.color, enabled: can && !locked, locked });
+  });
   const target = targetSlot(state);
   state.brewSlots.forEach((slot, i) => {
     const r = brewSlotRects[i];
@@ -280,7 +366,7 @@ function drawHints(ctx) {
   const r = hintRect;
   ctx.fillStyle = '#1c0f08';
   ctx.fillRect(r.x, r.y, r.w, r.h);
-  txt(ctx, '1-4 茶底   Q W E R 小料   S 摇杯   空格 出杯   X 倒掉   P 暂停   M 静音   Shift+R 重开', W / 2, r.y + r.h / 2, { size: 17, color: '#e8cfa4', align: 'center' });
+  txt(ctx, '1-6 茶底   Q W E R 小料   S 摇杯   空格 出杯   X 倒掉   P 暂停   M 静音   Shift+R 重开本关', W / 2, r.y + r.h / 2, { size: 17, color: '#e8cfa4', align: 'center' });
 }
 
 function hudButton(ctx, state, r, label) {
@@ -304,12 +390,24 @@ function drawHud(ctx, state) {
     txt(ctx, label, x, 28, { size: 16, color: '#c9a77a' });
     txt(ctx, value, x + 52, 28, { size: 26, weight: 'bold', color });
   };
-  item(190, '时间', formatTime(left), left <= 20 ? '#ff6b5a' : '#ffe9b0');
-  item(370, '得分', String(state.score));
-  item(580, '金币', String(state.coins), '#ffd36a');
+  fillRR(ctx, 172, 11, 84, 34, 17, '#c2410c', '#ffd36a', 2);
+  txt(ctx, `第 ${state.level} 关`, 214, 28, { size: 19, weight: 'bold', color: '#fff6dc', align: 'center' });
+  item(272, '时间', formatTime(left), left <= 20 ? '#ff6b5a' : '#ffe9b0');
+  // 得分 / 目标：带进度条，达标后变金色
+  const reached = state.score >= state.target;
+  txt(ctx, `得分 ${state.score}`, 410, 20, { size: 21, weight: 'bold', color: reached ? '#ffd36a' : '#ffe9b0' });
+  txt(ctx, `目标 ${state.target}`, 700, 20, { size: 16, color: reached ? '#ffd36a' : '#c9a77a', align: 'right' });
+  fillRR(ctx, 410, 36, 290, 9, 4.5, 'rgba(255,255,255,0.14)');
+  const prog = Math.min(1, state.score / state.target);
+  if (prog > 0) fillRR(ctx, 410, 36, Math.max(9, 290 * prog), 9, 4.5, reached ? '#ffcf3f' : '#7fd37a');
+  item(722, '金币', String(state.coins), '#ffd36a');
   const mult = comboMultiplier(state.combo);
-  item(780, '连击', `×${mult.toFixed(1)}`, state.combo > 0 ? '#ff9f5a' : '#8d7a64');
-  if (state.combo > 0) txt(ctx, `${state.combo} 连`, 925, 28, { size: 16, color: '#ff9f5a' });
+  item(862, '连击', `×${mult.toFixed(1)}`, state.combo > 0 ? '#ff9f5a' : '#8d7a64');
+  if (state.combo > 0) txt(ctx, `${state.combo}连`, 972, 28, { size: 15, color: '#ff9f5a' });
+  // 高峰指示：高峰时段内高亮
+  const rp = 0.5 + 0.5 * Math.sin(state.time * 6);
+  fillRR(ctx, 1030, 14, 66, 28, 14, state.rush ? `rgb(${230 + Math.round(25 * rp)},${90 + Math.round(40 * rp)},20)` : 'rgba(255,255,255,0.08)', state.rush ? '#ffd36a' : '#6d5a46', 2);
+  txt(ctx, '高峰', 1063, 28, { size: 16, weight: 'bold', color: state.rush ? '#fff6dc' : '#8d7a64', align: 'center' });
   for (let i = 0; i < 3; i++) drawStar(ctx, 1130 + i * 52, 28, 19, i < state.stars);
 }
 

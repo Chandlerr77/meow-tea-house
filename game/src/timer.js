@@ -1,17 +1,17 @@
-// 时间与难度曲线：难度只随速度提升。
+// 时间常量与难度（由关卡配置决定）。
 export const SHIFT_SECONDS = 180;
 export const BREW_SECONDS = 3;
 export const SHAKE_SECONDS = 2;
 
-const lerp = (a, b, t) => a + (b - a) * t;
-const clamp01 = (v) => Math.max(0, Math.min(1, v));
+export const RUSH_SPAWN_FACTOR = 0.8;
+export const RUSH_TIP_FACTOR = 1.5;
 
-export function difficulty(elapsed) {
-  const t = clamp01(elapsed / SHIFT_SECONDS);
+// 难度完全由关卡配置决定（levels.js）；高峰时段只把到达间隔 ×0.6
+export function difficulty(cfg, rush = false) {
   return {
-    spawnInterval: lerp(9, 5, t),
-    patience: lerp(36, 22, t),
-    maxOrders: elapsed >= 60 ? 4 : 3,
+    spawnInterval: cfg.spawnInterval * (rush ? RUSH_SPAWN_FACTOR : 1),
+    patience: cfg.patience,
+    maxOrders: cfg.maxOrders,
   };
 }
 
