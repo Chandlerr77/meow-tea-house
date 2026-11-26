@@ -7,6 +7,7 @@ import { render } from './render.js';
 import { initInput } from './input.js';
 import { buildScene } from './scenes.js';
 import { initMobile } from './mobile.js';
+import { catSheets, loadCatSheets } from './assets.js';
 
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
@@ -61,4 +62,27 @@ function frame(now) {
   }
   requestAnimationFrame(frame);
 }
-requestAnimationFrame(frame);
+
+function drawLoading() {
+  ctx.fillStyle = '#fff3dc';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = '#7b2d1a';
+  ctx.font = 'bold 32px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('猫咪们正在赶来…', canvas.width / 2, canvas.height / 2);
+}
+
+async function start() {
+  drawLoading();
+  try {
+    const timeout = new Promise((resolve) => setTimeout(() => resolve(null), 8000));
+    const loaded = await Promise.race([loadCatSheets(), timeout]);
+    if (loaded) Object.assign(catSheets, loaded);
+  } catch (err) {
+    console.error('sprite sheet preload error', err);
+  }
+  last = performance.now();
+  requestAnimationFrame(frame);
+}
+start();

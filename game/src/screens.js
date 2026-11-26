@@ -3,6 +3,7 @@ import {
   W, H, hit, titleStartBtn, levelButtons, tutorialCards, resultsButtons, pauseContinueBtn, pauseRestartBtn,
 } from './layout.js';
 import { fillRR, txt, circle, ellipse, poly, drawStar } from './draw.js';
+import { catSheets, drawSheetFrame } from './assets.js';
 import { MAX_LEVEL, getLevel } from './levels.js';
 
 const INK = '#4a2c1a';
@@ -116,87 +117,207 @@ function cozyCup(ctx, cx, by, t) {
   }
 }
 
+// 条纹辅助：在椭圆内裁剪后画深色条纹（保证条纹不越界）
+function furStripes(ctx, x, y, rx, ry, rot, lines, color, lw) {
+  ctx.save();
+  ctx.beginPath();
+  ctx.ellipse(x, y, rx, ry, rot, 0, Math.PI * 2);
+  ctx.clip();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = lw;
+  ctx.lineCap = 'round';
+  for (const [x1, y1, x2, y2] of lines) {
+    ctx.beginPath();
+    ctx.moveTo(x1, y1);
+    ctx.lineTo(x2, y2);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+// 虎斑小爪：局部坐标 (0,0) 为椭圆中心，白色趾尖帽在 dir 方向（+1 底端 / -1 顶端）
+function tabbyPaw(ctx, rx, ry, dir) {
+  const FUR = '#9a8a76', DARK = '#4a3a2c', LINE = '#4a2c1a';
+  ellipse(ctx, 0, 0, rx, ry, FUR);
+  furStripes(ctx, 0, 0, rx, ry, 0, [
+    [-rx, -ry * 0.25 * dir, -rx * 0.3, -ry * 0.2 * dir],
+    [rx, -ry * 0.05 * dir, rx * 0.3, 0],
+    [-rx, ry * 0.12 * dir, -rx * 0.4, ry * 0.15 * dir],
+  ], DARK, 4);
+  // 白色趾尖帽
+  ctx.save();
+  ctx.beginPath();
+  ctx.ellipse(0, 0, rx, ry, 0, 0, Math.PI * 2);
+  ctx.clip();
+  const capY = dir * ry * 0.5;
+  const endY = dir * (ry + 4);
+  ctx.fillStyle = '#fffaf0';
+  ctx.fillRect(-rx - 2, Math.min(capY, endY), rx * 2 + 4, Math.abs(endY - capY));
+  ctx.strokeStyle = LINE;
+  ctx.lineWidth = 1.8;
+  ctx.lineCap = 'round';
+  for (const dx of [-rx * 0.33, rx * 0.33]) {
+    ctx.beginPath();
+    ctx.moveTo(dx, capY + dir * 5);
+    ctx.lineTo(dx, dir * (ry - 4));
+    ctx.stroke();
+  }
+  ctx.beginPath();
+  ctx.moveTo(-rx, capY);
+  ctx.lineTo(rx, capY);
+  ctx.lineWidth = 1.2;
+  ctx.globalAlpha = 0.5;
+  ctx.stroke();
+  ctx.restore();
+  ellipse(ctx, 0, 0, rx, ry, null, 0, LINE, 3.5);
+}
+
 function manekiNeko(ctx, cx, cy, t) {
   const blink = t % 3 > 2.8;
-  // 摇摆的尾巴（在身体后面）
+  const FUR = '#9a8a76', DARK = '#4a3a2c', LINE = '#4a2c1a', TAN = '#c2a878';
+  ctx.lineJoin = 'round';
+  // 1. 尾巴：短、粗、简单的弧线，贴在身体左侧；两条深色横带 + 深色尾尖
   const sway = Math.sin(t * 2.6);
+  const P0 = [cx - 55, cy + 232], P1 = [cx - 112, cy + 248];
+  const P2 = [cx - 146, cy + 214], P3 = [cx - 135 - sway * 8, cy + 180 + sway * 3];
   const tail = () => {
     ctx.beginPath();
-    ctx.moveTo(cx + 70, cy + 238);
-    ctx.bezierCurveTo(cx + 140, cy + 252, cx + 150 + sway * 12, cy + 190, cx + 112 + sway * 28, cy + 134);
+    ctx.moveTo(P0[0], P0[1]);
+    ctx.bezierCurveTo(P1[0], P1[1], P2[0], P2[1], P3[0], P3[1]);
+  };
+  const bz = (u, k) => {
+    const m = 1 - u;
+    return m * m * m * P0[k] + 3 * m * m * u * P1[k] + 3 * m * u * u * P2[k] + u * u * u * P3[k];
   };
   ctx.lineCap = 'round';
   tail();
-  ctx.strokeStyle = '#d3bfa0';
-  ctx.lineWidth = 30;
+  ctx.strokeStyle = LINE;
+  ctx.lineWidth = 33;
   ctx.stroke();
   tail();
-  ctx.strokeStyle = '#fffaf0';
-  ctx.lineWidth = 24;
+  ctx.strokeStyle = FUR;
+  ctx.lineWidth = 26;
   ctx.stroke();
-  circle(ctx, cx + 112 + sway * 28, cy + 134, 12, '#f0a04b');
-  // 身体
-  ellipse(ctx, cx, cy + 150, 104, 120, '#fffaf0', 0, '#d3bfa0', 3);
-  // 放下的前爪与金币
-  ellipse(ctx, cx - 62, cy + 150, 24, 52, '#fffaf0', 0.25, '#d3bfa0', 3);
-  ellipse(ctx, cx - 28, cy + 188, 36, 44, '#ffcf3f', 0, '#b8860b', 4);
-  ellipse(ctx, cx - 28, cy + 188, 26, 34, null, 0, '#b8860b', 2);
-  txt(ctx, '福', cx - 28, cy + 188, { size: 32, weight: 'bold', color: '#b8321f', align: 'center' });
-  // 招手的爪
+  ctx.lineCap = 'butt';
+  ctx.strokeStyle = DARK;
+  ctx.lineWidth = 6;
+  for (const u of [0.45, 0.72]) {
+    const x = bz(u, 0), y = bz(u, 1);
+    const dx = bz(u + 0.01, 0) - bz(u - 0.01, 0), dy = bz(u + 0.01, 1) - bz(u - 0.01, 1);
+    const d = Math.hypot(dx, dy) || 1;
+    const nx = -dy / d * 12, ny = dx / d * 12;
+    ctx.beginPath();
+    ctx.moveTo(x - nx, y - ny);
+    ctx.lineTo(x + nx, y + ny);
+    ctx.stroke();
+  }
+  ctx.lineCap = 'round';
+  // 深色尾尖：圆心正好在笔画终点，半径 = 笔画宽的一半
+  circle(ctx, P3[0], P3[1], 13, DARK, LINE, 4);
+  // 2. 身体：小而紧凑
+  ellipse(ctx, cx, cy + 168, 76, 68, FUR);
+  const sideLines = [];
+  for (const y of [152, 176]) {
+    sideLines.push([cx - 80, cy + y, cx - 60, cy + y + 4]);
+    sideLines.push([cx + 80, cy + y, cx + 60, cy + y + 4]);
+  }
+  furStripes(ctx, cx, cy + 168, 76, 68, 0, sideLines, DARK, 6);
+  ellipse(ctx, cx, cy + 168, 76, 68, null, 0, LINE, 4);
+  // 3. 放下的前爪：短圆，白趾尖
   ctx.save();
-  ctx.translate(cx + 78, cy + 110);
-  ctx.rotate(-0.35 + Math.sin(t * 3.2) * 0.28);
-  ellipse(ctx, 0, -55, 26, 60, '#fffaf0', 0, '#d3bfa0', 3);
-  circle(ctx, 0, -100, 9, '#f6a8b4');
-  for (const dx of [-8, 0, 8]) circle(ctx, dx, -80 + Math.abs(dx) * 0.4, 4, '#f6a8b4');
+  ctx.translate(cx - 52, cy + 196);
+  tabbyPaw(ctx, 12, 13, 1);
   ctx.restore();
-  // 耳朵
-  poly(ctx, [[cx - 92, cy + 5], [cx - 84, cy - 70], [cx - 28, cy - 38]], '#fffaf0', '#d3bfa0', 3);
-  poly(ctx, [[cx + 92, cy + 5], [cx + 84, cy - 70], [cx + 28, cy - 38]], '#fffaf0', '#d3bfa0', 3);
-  poly(ctx, [[cx - 80, cy - 8], [cx - 77, cy - 52], [cx - 46, cy - 34]], '#f6a8b4');
-  poly(ctx, [[cx + 80, cy - 8], [cx + 77, cy - 52], [cx + 46, cy - 34]], '#f6a8b4');
-  // 头
-  ellipse(ctx, cx, cy + 20, 108, 86, '#fffaf0', 0, '#d3bfa0', 3);
-  ellipse(ctx, cx - 52, cy - 26, 34, 22, '#f0a04b', -0.4);
-  ellipse(ctx, cx + 58, cy - 22, 28, 20, '#3a3a3a', 0.4);
-  // 脸：睁眼（约每 3 秒眨一次）
-  ctx.strokeStyle = '#3a2a22';
+  // 4. 耳朵：大圆三角，底边埋进头顶两角
+  poly(ctx, [[cx - 106, cy - 6], [cx - 88, cy - 80], [cx - 24, cy - 56]], FUR, LINE, 4);
+  poly(ctx, [[cx + 106, cy - 6], [cx + 88, cy - 80], [cx + 24, cy - 56]], FUR, LINE, 4);
+  poly(ctx, [[cx - 92, cy - 14], [cx - 84, cy - 62], [cx - 48, cy - 46]], '#e8a09a');
+  poly(ctx, [[cx + 92, cy - 14], [cx + 84, cy - 62], [cx + 48, cy - 46]], '#e8a09a');
+  // 5. 头：大而圆
+  ellipse(ctx, cx, cy + 8, 112, 92, FUR);
+  const hl = [];
+  for (const [dx, len] of [[-20, 22], [0, 28], [20, 22]]) hl.push([cx + dx, cy - 80, cx + dx * 0.9, cy - 80 + len]);
+  for (const s of [-1, 1]) {
+    for (const y of [34, 52]) hl.push([cx + s * 116, cy + y, cx + s * 84, cy + y + 4]);
+  }
+  furStripes(ctx, cx, cy + 8, 112, 92, 0, hl, DARK, 7);
+  ellipse(ctx, cx, cy + 8, 112, 92, null, 0, LINE, 4);
+  // 吻部（棕褐色）与小块白下巴
+  ellipse(ctx, cx, cy + 62, 34, 22, TAN);
+  ellipse(ctx, cx, cy + 79, 12, 6, '#fffaf0');
+  // 6. 脸：大而鲜绿的眼睛（约每 3 秒眨一次）
+  ctx.strokeStyle = '#2f2019';
   ctx.lineWidth = 4;
   ctx.lineCap = 'round';
   for (const s of [-1, 1]) {
+    const ex = cx + s * 46, ey = cy + 26;
     if (blink) {
       ctx.beginPath();
-      ctx.arc(cx + s * 42, cy + 20, 14, 0.12 * Math.PI, 0.88 * Math.PI);
+      ctx.arc(ex, ey, 16, 0.12 * Math.PI, 0.88 * Math.PI);
       ctx.stroke();
     } else {
-      ellipse(ctx, cx + s * 42, cy + 24, 11, 14, '#2f2019');
-      circle(ctx, cx + s * 42 - 3.5, cy + 18, 4, '#fff');
-      circle(ctx, cx + s * 42 + 3, cy + 29, 2, 'rgba(255,255,255,0.7)');
+      ellipse(ctx, ex, ey, 21, 25, '#86c232', 0, '#2f2019', 3.5);
+      ellipse(ctx, ex, ey + 1, 11, 18, '#1b120d');
+      circle(ctx, ex - 6, ey - 9, 6, '#fff');
+      circle(ctx, ex + 6, ey + 10, 3, 'rgba(255,255,255,0.8)');
     }
-    circle(ctx, cx + s * 66, cy + 52, 13, 'rgba(244,140,160,0.6)');
+    circle(ctx, cx + s * 68, cy + 66, 9, 'rgba(232,130,140,0.4)');
   }
-  poly(ctx, [[cx - 7, cy + 38], [cx + 7, cy + 38], [cx, cy + 47]], '#e8758a');
+  poly(ctx, [[cx - 7, cy + 51], [cx + 7, cy + 51], [cx, cy + 59]], '#d97a6a', '#8a4a3a', 1.5);
   ctx.strokeStyle = '#3a2a22';
   ctx.beginPath();
-  ctx.arc(cx - 8, cy + 48, 8, 0.1 * Math.PI, 0.9 * Math.PI);
-  ctx.arc(cx + 8, cy + 48, 8, 0.1 * Math.PI, 0.9 * Math.PI);
+  ctx.arc(cx - 7, cy + 60, 7, 0.1 * Math.PI, 0.9 * Math.PI);
+  ctx.arc(cx + 7, cy + 60, 7, 0.1 * Math.PI, 0.9 * Math.PI);
   ctx.lineWidth = 2.5;
   ctx.stroke();
   ctx.lineWidth = 2;
-  ctx.strokeStyle = '#8a7a6a';
+  ctx.strokeStyle = '#fffaf0';
   for (const s of [-1, 1]) {
-    for (const dy of [-6, 4, 14]) {
+    for (const dy of [-8, 2, 12]) {
       ctx.beginPath();
-      ctx.moveTo(cx + s * 70, cy + 46 + dy * 0.4);
-      ctx.lineTo(cx + s * 112, cy + 44 + dy);
+      ctx.moveTo(cx + s * 76, cy + 62 + dy * 0.3);
+      ctx.lineTo(cx + s * 122, cy + 62 + dy * 1.5);
       ctx.stroke();
     }
   }
-  // 项圈与铃铛
-  ellipse(ctx, cx, cy + 100, 84, 18, '#d9342b', 0, '#8a1c1c', 3);
-  circle(ctx, cx, cy + 124, 16, '#ffcf3f', '#b8860b', 3);
+  // 7. 项圈（沿颈部弧线）与铃铛
+  const collar = () => {
+    ctx.beginPath();
+    ctx.moveTo(cx - 58, cy + 82);
+    ctx.quadraticCurveTo(cx, cy + 112, cx + 58, cy + 82);
+  };
+  collar();
+  ctx.strokeStyle = '#8a1c1c';
+  ctx.lineWidth = 27;
+  ctx.stroke();
+  collar();
+  ctx.strokeStyle = '#d9342b';
+  ctx.lineWidth = 20;
+  ctx.stroke();
+  circle(ctx, cx, cy + 112, 14, '#ffcf3f', '#b8860b', 3);
   ctx.fillStyle = '#b8860b';
-  ctx.fillRect(cx - 9, cy + 124, 18, 3);
+  ctx.fillRect(cx - 8, cy + 114, 16, 3);
+  // 8. 福字金币（胸口，铃铛下方，不碰两只爪）
+  ellipse(ctx, cx, cy + 188, 13, 15, '#ffcf3f', 0, '#b8860b', 3);
+  txt(ctx, '福', cx, cy + 188, { size: 17, weight: 'bold', color: '#b8321f', align: 'center' });
+  // 9. 招手的爪：最后画；短臂 + 圆爪，支点在右肩，向外倾斜小幅摆动
+  ctx.save();
+  ctx.translate(cx + 78, cy + 128);
+  ctx.rotate(1.0 + Math.sin(t * 3.2) * 0.22);
+  ctx.lineCap = 'round';
+  for (const [col, w] of [[LINE, 36], [FUR, 29]]) {
+    ctx.strokeStyle = col;
+    ctx.lineWidth = w;
+    ctx.beginPath();
+    ctx.moveTo(0, 12);
+    ctx.lineTo(0, -45);
+    ctx.stroke();
+  }
+  ctx.translate(0, -55);
+  tabbyPaw(ctx, 26, 30, -1);
+  for (const dx of [-12, 0, 12]) circle(ctx, dx, -19 + Math.abs(dx) * 0.25, 3.6, '#f6a8b4');
+  ctx.restore();
+  ctx.lineJoin = 'miter';
 }
 
 function padlock(ctx, cx, cy) {
@@ -380,11 +501,15 @@ export function drawTitle(ctx, state) {
 
   // 猫咪店长 + 热茶
   ellipse(ctx, CAT_X + 100, CAT_Y + 252, 190, 16, 'rgba(90,50,20,0.22)');
-  ctx.save();
-  ctx.translate(CAT_X, CAT_Y);
-  ctx.scale(CAT_SCALE, CAT_SCALE);
-  manekiNeko(ctx, 0, 0, t);
-  ctx.restore();
+  if (catSheets.wave) {
+    drawSheetFrame(ctx, catSheets.wave, t, 72, 190, 226, 300);
+  } else {
+    ctx.save();
+    ctx.translate(CAT_X, CAT_Y);
+    ctx.scale(CAT_SCALE, CAT_SCALE);
+    manekiNeko(ctx, 0, 0, t);
+    ctx.restore();
+  }
   cozyCup(ctx, 372, 506, t);
 
   // 关卡选择
@@ -480,4 +605,10 @@ export function drawResults(ctx, state) {
   if (b.next) bigButton(ctx, state, b.next, '下一关', 'Enter / 空格', 'green');
   bigButton(ctx, state, b.again, '再来一局', showNext ? null : 'Enter / 空格');
   bigButton(ctx, state, b.title, '返回标题', null, 'brown');
+
+  // 睡着的猫咪（面板外，右侧）
+  if (catSheets.sleep) {
+    drawSheetFrame(ctx, catSheets.sleep, state.time, 985, 420, 160, 213);
+    txt(ctx, '打烊了，猫咪睡着了', 1065, 665, { size: 17, color: '#ffe9b0', align: 'center' });
+  }
 }

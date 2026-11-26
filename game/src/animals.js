@@ -1,13 +1,18 @@
 // 动物顾客的矢量绘制：猫、狗、兔子、熊猫、狐狸，以及 VIP 金色猫。
+import { catSheets, drawSheetFrame } from './assets.js';
 import { circle, ellipse, poly, fillRR, txt } from './draw.js';
 
 const OUTLINE = '#4a2c1a';
 
 function face(ctx, cx, cy, mood, o = {}) {
-  const { eyeY = cy - 4, spread = 17, white = false } = o;
+  const { eyeY = cy - 4, spread = 17, white = false, green = false } = o;
   for (const s of [-1, 1]) {
     const ex = cx + s * spread;
-    if (white) {
+    if (green) {
+      ellipse(ctx, ex, eyeY, 8.5, 10, '#86c232', 0, '#2f2019', 1.8);
+      ellipse(ctx, ex, eyeY + 0.5, 4.6, 7.4, '#1b120d');
+      circle(ctx, ex - 2.6, eyeY - 3.6, 2.6, '#fff');
+    } else if (white) {
       circle(ctx, ex, eyeY, 5.5, '#fff');
       circle(ctx, ex, eyeY, 3, '#111');
     } else {
@@ -43,35 +48,86 @@ function body(ctx, cx, cy, color, scarf) {
   ellipse(ctx, cx, cy + 44, 34, 9, scarf, 0, OUTLINE, 2);
 }
 
-function drawCat(ctx, cx, cy, mood) {
-  body(ctx, cx, cy, '#f0a04b', '#e0475b');
-  poly(ctx, [[cx - 44, cy - 10], [cx - 40, cy - 62], [cx - 8, cy - 36]], '#f0a04b', OUTLINE, 2);
-  poly(ctx, [[cx + 44, cy - 10], [cx + 40, cy - 62], [cx + 8, cy - 36]], '#f0a04b', OUTLINE, 2);
-  poly(ctx, [[cx - 37, cy - 22], [cx - 36, cy - 50], [cx - 18, cy - 35]], '#f7b6b6');
-  poly(ctx, [[cx + 37, cy - 22], [cx + 36, cy - 50], [cx + 18, cy - 35]], '#f7b6b6');
-  ellipse(ctx, cx, cy, 49, 42, '#f0a04b', 0, OUTLINE, 2);
-  ctx.strokeStyle = '#c9772a';
-  ctx.lineWidth = 3;
-  ctx.lineCap = 'round';
-  for (const dx of [-10, 0, 10]) {
+function tabbyPawSmall(ctx, x, y) {
+  const rx = 13, ry = 10;
+  ellipse(ctx, x, y, rx, ry, '#9a8a76');
+  ctx.save();
+  ctx.beginPath();
+  ctx.ellipse(x, y, rx, ry, 0, 0, Math.PI * 2);
+  ctx.clip();
+  ctx.fillStyle = '#fffaf0';
+  ctx.fillRect(x - rx - 1, y + 1, rx * 2 + 2, ry + 2);
+  ctx.strokeStyle = OUTLINE;
+  ctx.lineWidth = 1.2;
+  for (const dx of [-4.5, 4.5]) {
     ctx.beginPath();
-    ctx.moveTo(cx + dx, cy - 40);
-    ctx.lineTo(cx + dx * 0.8, cy - 26);
+    ctx.moveTo(x + dx, y + 3);
+    ctx.lineTo(x + dx, y + ry);
     ctx.stroke();
   }
-  ellipse(ctx, cx, cy + 14, 19, 13, '#fff1d6');
-  face(ctx, cx, cy, mood);
-  poly(ctx, [[cx - 5, cy + 5], [cx + 5, cy + 5], [cx, cy + 11]], '#e8758a');
-  ctx.strokeStyle = '#6a4a38';
+  ctx.strokeStyle = '#4a3a2c';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(x - rx, y - 4);
+  ctx.lineTo(x - 7, y - 3);
+  ctx.moveTo(x + rx, y - 4);
+  ctx.lineTo(x + 7, y - 3);
+  ctx.stroke();
+  ctx.restore();
+  ellipse(ctx, x, y, rx, ry, null, 0, OUTLINE, 2);
+}
+
+function drawCat(ctx, cx, cy, mood) {
+  const FUR = '#9a8a76', DARK = '#4a3a2c';
+  // 紧凑小身体（头明显更大）
+  ellipse(ctx, cx, cy + 62, 42, 34, FUR, 0, OUTLINE, 2);
+  ctx.lineJoin = 'round';
+  poly(ctx, [[cx - 54, cy - 6], [cx - 44, cy - 68], [cx - 12, cy - 42]], FUR, OUTLINE, 2);
+  poly(ctx, [[cx + 54, cy - 6], [cx + 44, cy - 68], [cx + 12, cy - 42]], FUR, OUTLINE, 2);
+  poly(ctx, [[cx - 46, cy - 18], [cx - 43, cy - 54], [cx - 24, cy - 38]], '#e8a09a');
+  poly(ctx, [[cx + 46, cy - 18], [cx + 43, cy - 54], [cx + 24, cy - 38]], '#e8a09a');
+  ellipse(ctx, cx, cy, 56, 48, FUR, 0, OUTLINE, 2);
+  ctx.save();
+  ctx.beginPath();
+  ctx.ellipse(cx, cy, 55, 47, 0, 0, Math.PI * 2);
+  ctx.clip();
+  ctx.strokeStyle = DARK;
+  ctx.lineWidth = 3.5;
+  ctx.lineCap = 'round';
+  for (const [dx, len] of [[-10, 11], [0, 15], [10, 11]]) {
+    ctx.beginPath();
+    ctx.moveTo(cx + dx, cy - 48);
+    ctx.lineTo(cx + dx * 0.9, cy - 48 + len);
+    ctx.stroke();
+  }
+  for (const s of [-1, 1]) {
+    for (const dy of [12, 22]) {
+      ctx.beginPath();
+      ctx.moveTo(cx + s * 58, cy + dy);
+      ctx.lineTo(cx + s * 44, cy + dy + 2);
+      ctx.stroke();
+    }
+  }
+  ctx.restore();
+  ellipse(ctx, cx, cy + 17, 16, 10, '#c2a878');
+  ellipse(ctx, cx, cy + 32, 6.5, 3.5, '#fffaf0');
+  face(ctx, cx, cy, mood, { green: true, eyeY: cy + 1, spread: 22 });
+  poly(ctx, [[cx - 4, cy + 9], [cx + 4, cy + 9], [cx, cy + 14]], '#d97a6a');
+  ctx.strokeStyle = '#fffaf0';
   ctx.lineWidth = 1.5;
   for (const s of [-1, 1]) {
     for (const dy of [-3, 4]) {
       ctx.beginPath();
-      ctx.moveTo(cx + s * 22, cy + 14 + dy * 0.5);
-      ctx.lineTo(cx + s * 52, cy + 12 + dy * 2.5);
+      ctx.moveTo(cx + s * 24, cy + 16 + dy * 0.5);
+      ctx.lineTo(cx + s * 56, cy + 14 + dy * 2.5);
       ctx.stroke();
     }
   }
+  ctx.lineJoin = 'miter';
+  ellipse(ctx, cx, cy + 47, 30, 8, '#e0475b', 0, OUTLINE, 2);
+  // 前爪：圆而大，白趾尖；(cx±22, cy+58) 在柜台裁剪线之上
+  tabbyPawSmall(ctx, cx - 22, cy + 58);
+  tabbyPawSmall(ctx, cx + 22, cy + 58);
 }
 
 function drawDog(ctx, cx, cy, mood) {
@@ -181,5 +237,9 @@ export function moodFor(ratio) {
 
 export function drawAnimal(ctx, kind, cx, cy, t, ratio) {
   const bob = Math.sin(t * 2.2 + cx * 0.01) * 2;
+  if (kind === 'cat' && catSheets.wait) {
+    drawSheetFrame(ctx, catSheets.wait, t, cx - 62, cy - 68 + bob, 124, 164);
+    return;
+  }
   (DRAWERS[kind] || drawCat)(ctx, cx, cy + bob, moodFor(ratio));
 }
